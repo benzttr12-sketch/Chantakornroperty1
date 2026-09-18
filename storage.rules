@@ -1,0 +1,49 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasProfileRole(role) {
+      return signedIn()
+        && firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.role == role;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.role == 'ADMIN'
+        && hasProfileRole('ADMIN');
+    }
+
+    function isAgent() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.role == 'AGENT'
+        && hasProfileRole('AGENT');
+    }
+
+    function isOwnerAgentOrAdmin(ownerUid) {
+      return isAdmin() || (isAgent() && request.auth.uid == ownerUid);
+    }
+
+    match /agent-photos/{agentId}/{fileName} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && request.resource.size > 0
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if isAdmin();
+    }
+
+    match /property-images/{ownerUid}/{folder}/{fileName} {
+      allow read: if true;
+      allow create, update: if isOwnerAgentOrAdmin(ownerUid)
+        && request.resource.size > 0
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if isOwnerAgentOrAdmin(ownerUid);
+    }
+  }
+}

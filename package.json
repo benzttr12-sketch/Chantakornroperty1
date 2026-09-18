@@ -1,0 +1,50 @@
+{
+  "name": "chantakorn-property-production",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000 -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -p 3000 -H 0.0.0.0",
+    "lint": "eslint src --ext .ts,.tsx --max-warnings=0",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "node --test tests/*.test.cjs",
+    "build:pages": "node scripts/build-pages.mjs",
+    "preview:pages": "node scripts/preview-pages.mjs",
+    "set-role": "node scripts/set-user-role.mjs",
+    "preflight": "node scripts/validate-production.mjs",
+    "verify": "npm run lint && npm run typecheck && npm test",
+    "release:check": "npm run preflight && npm run verify && npm run build:pages"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.23"
+    }
+  },
+  "dependencies": {
+    "clsx": "2.1.1",
+    "leaflet": "1.9.4",
+    "lucide-react": "0.453.0",
+    "next": "15.5.25",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tailwind-merge": "2.5.4",
+    "firebase": "12.19.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "1.9.12",
+    "@types/node": "20.17.0",
+    "@types/react": "18.3.11",
+    "@types/react-dom": "18.3.1",
+    "autoprefixer": "10.4.20",
+    "eslint": "8.57.1",
+    "eslint-config-next": "15.5.25",
+    "postcss": "8.5.23",
+    "tailwindcss": "3.4.14",
+    "typescript": "5.6.3",
+    "firebase-admin": "14.4.0"
+  }
+}

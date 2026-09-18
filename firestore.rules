@@ -1,0 +1,197 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasProfileRole(role) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == role;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.role == 'ADMIN'
+        && hasProfileRole('ADMIN');
+    }
+
+    function isAgent() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.role == 'AGENT'
+        && hasProfileRole('AGENT');
+    }
+
+    function isStaff() {
+      return isAdmin() || isAgent();
+    }
+
+    function isNumber(value) {
+      return value is int || value is float;
+    }
+
+    function validStoredDate(value) {
+      return value is timestamp || (value is string && value.size() <= 64);
+    }
+
+    function validConsignment(details) {
+      return details is map
+        && details.keys().hasAll(['property_type', 'province', 'district', 'expected_price'])
+        && details.keys().hasOnly([
+          'property_type', 'province', 'district', 'subdistrict', 'expected_price', 'land_size', 'usable_area'
+        ])
+        && details.property_type is string
+        && details.property_type.size() <= 50
+        && details.province is string
+        && details.province.size() <= 100
+        && details.district is string
+        && details.district.size() <= 100
+        && isNumber(details.expected_price)
+        && details.expected_price > 0
+        && (!('subdistrict' in details) || (details.subdistrict is string && details.subdistrict.size() <= 120))
+        && (!('land_size' in details) || (isNumber(details.land_size) && details.land_size >= 0))
+        && (!('usable_area' in details) || (isNumber(details.usable_area) && details.usable_area >= 0));
+    }
+
+    function validInquiry(data) {
+      return data.keys().hasAll(['id', 'name', 'phone', 'message', 'inquiry_type', 'status', 'created_at'])
+        && data.keys().hasOnly([
+          'id', 'property_id', 'property_title', 'name', 'phone', 'line_id', 'message',
+          'inquiry_type', 'status', 'consignment_details', 'created_at'
+        ])
+        && data.id is string
+        && data.id.size() > 0
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 120
+        && data.phone is string
+        && data.phone.size() >= 8
+        && data.phone.size() <= 30
+        && data.message is string
+        && data.message.size() > 0
+        && data.message.size() <= 5000
+        && data.inquiry_type in ['inquiry', 'viewing', 'consignment_sell']
+        && data.status == 'new'
+        && data.created_at == request.time
+        && (!('line_id' in data) || (data.line_id is string && data.line_id.size() <= 100))
+        && (!('property_id' in data) || (data.property_id is string && data.property_id.size() <= 128))
+        && (!('property_title' in data) || (data.property_title is string && data.property_title.size() <= 240))
+        && (!('consignment_details' in data) || validConsignment(data.consignment_details));
+    }
+
+    function validEditableProfile(data) {
+      return data.full_name is string
+        && data.full_name.size() >= 2
+        && data.full_name.size() <= 120
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 24))
+        && (!('avatar_url' in data) || (data.avatar_url is string && data.avatar_url.size() <= 2000));
+    }
+
+    function validProperty(data, id) {
+      return data.keys().hasAll([
+          'id', 'title', 'slug', 'description', 'property_type', 'status', 'price',
+          'province', 'district', 'latitude', 'longitude', 'bedrooms', 'bathrooms',
+          'parking', 'land_size', 'usable_area', 'furniture', 'features', 'cover_image',
+          'images', 'featured', 'published', 'created_at', 'updated_at'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'slug', 'description', 'property_type', 'status', 'price',
+          'province', 'district', 'subdistrict', 'address', 'latitude', 'longitude',
+          'bedrooms', 'bathrooms', 'parking', 'land_size', 'usable_area', 'year_built',
+          'furniture', 'features', 'cover_image', 'images', 'featured', 'published',
+          'agent_id', 'created_at', 'updated_at'
+        ])
+        && data.id == id
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 240
+        && data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 160
+        && data.description is string && data.description.size() >= 10 && data.description.size() <= 12000
+        && data.property_type in ['house', 'land', 'condo', 'commercial', 'investment', 'consignment']
+        && data.status in ['sale', 'rent']
+        && isNumber(data.price) && data.price > 0 && data.price <= 1000000000000
+        && data.province is string && data.province.size() >= 2 && data.province.size() <= 100
+        && data.district is string && data.district.size() >= 2 && data.district.size() <= 100
+        && (!('subdistrict' in data) || (data.subdistrict is string && data.subdistrict.size() <= 120))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 500))
+        && isNumber(data.latitude) && data.latitude >= -90 && data.latitude <= 90
+        && isNumber(data.longitude) && data.longitude >= -180 && data.longitude <= 180
+        && data.bedrooms is int && data.bedrooms >= 0 && data.bedrooms <= 200
+        && data.bathrooms is int && data.bathrooms >= 0 && data.bathrooms <= 200
+        && data.parking is int && data.parking >= 0 && data.parking <= 500
+        && isNumber(data.land_size) && data.land_size >= 0
+        && isNumber(data.usable_area) && data.usable_area >= 0
+        && (!('year_built' in data) || (data.year_built is int && data.year_built >= 1800 && data.year_built <= 2100))
+        && data.furniture is string && data.furniture.size() <= 500
+        && data.features is list && data.features.size() <= 50
+        && data.images is list && data.images.size() >= 1 && data.images.size() <= 20
+        && data.cover_image is string && data.cover_image.size() > 0 && data.cover_image.size() <= 2048
+        && data.images.hasAny([data.cover_image])
+        && data.featured is bool
+        && data.published is bool
+        && (!('agent_id' in data) || (data.agent_id is string && data.agent_id.size() <= 128))
+        && validStoredDate(data.created_at)
+        && validStoredDate(data.updated_at);
+    }
+
+    match /properties/{id} {
+      allow read: if resource.data.published == true || isStaff();
+      allow create: if isStaff()
+        && validProperty(request.resource.data, id)
+        && request.resource.data.created_at == request.time
+        && request.resource.data.updated_at == request.time;
+      allow update: if isStaff()
+        && validProperty(request.resource.data, id)
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.updated_at == request.time;
+      allow delete: if isStaff();
+    }
+
+    match /agents/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /inquiries/{id} {
+      allow create: if request.resource.data.id == id && validInquiry(request.resource.data);
+      allow read: if isStaff();
+      allow update: if isStaff()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['new', 'contacted', 'scheduled', 'closed'];
+      allow delete: if isAdmin();
+    }
+
+    match /profiles/{uid} {
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasAll([
+          'id', 'full_name', 'email', 'phone', 'role', 'created_at',
+          'privacy_accepted_at', 'privacy_version'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'id', 'full_name', 'email', 'phone', 'role', 'avatar_url', 'created_at',
+          'privacy_accepted_at', 'privacy_version'
+        ])
+        && request.resource.data.id == uid
+        && request.resource.data.role == 'USER'
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() >= 8
+        && request.resource.data.phone.size() <= 24
+        && request.resource.data.created_at == request.time
+        && request.resource.data.privacy_accepted_at == request.time
+        && request.resource.data.privacy_version is string
+        && request.resource.data.privacy_version.size() > 0
+        && request.resource.data.privacy_version.size() <= 32
+        && validEditableProfile(request.resource.data);
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow update: if (isAdmin() || (signedIn() && request.auth.uid == uid))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['full_name', 'phone', 'avatar_url'])
+        && validEditableProfile(request.resource.data);
+      allow delete: if false;
+    }
+  }
+}
